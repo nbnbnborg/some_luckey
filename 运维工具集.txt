@@ -1,0 +1,32 @@
+操作系统：Centos※,Ubuntu,Redhat※,suse，Freebsd
+网站服务：nginx※,apache※,tomcat※,lighttpd,php※,resin※
+数据库  ：MySQL※,Mysql-proxy,MariaDB，PostgreSQL--------------------------------------------------精mysql集群
+DB中间件：MyCat,amoeba,MySQL-proxy---------------------------------------------------------------------精mycat
+代理相关：lvs,keepalived,haproxy,nginx,apache,heartbeat（都是※）--------------------------------精lvs,haproxy
+网站缓存：squid※,nginx※,varnish-----------------------------------------------------------------------精squid
+NOSQL库 ：memcached※,memcachedb,TokyoTyrant※,MongoDB※,Cassandra※,redis※,CouchDB-精memcached,mongodb,redis集群
+存储相关：NfS※,TFS※,Moosefs(mfs)※,Hadoop※,glusterfs※,lustre,FastDFS------------------------------精hadoop,nfs
+版本管理：SVN※,GIT※
+监控报警：nagios※,cacti※,zabbix※,munin,hyperic,mrtg,graphite
+域名解析：bind※,powerdns,dnsmasq※
+同步软件：rsync※,inotify※,sersync※,drbd※,csync2,union,lsyncd,scp※-----------------------------精rsync,sersync
+批量管理：ssh+rsync+sersync※,Saltstack※,expect※,puppet※,ansible,cfengine----------------------------精ansible
+虚拟化  ：kvm※,xen※,VMware vSphere,ESXi
+云计算  ：openstack※,docker※,cloudstack,ZStack--------------------------------------------------------精docker
+内网软件：iptables※,zebra※,iftraf,ntop※,tc※,iftop--------------------------------------------------精iptables
+邮件软件：qmail,posfix※,sendmail,Postfix+postfixadmin+roundcube,U-mail,MS Exchange
+远程拨号：openvpn※,pptp,openswan※,ipip※
+统一认证：openldap(可结合微软活动目录)※
+队列工具：ActiveMQ,RabbitMQ※,Metaq,MemcacheQ,Zeromq-------------------------------------------------精RabbitMQ
+打包发布：mvn※,ants※,jenkins※,svn,gitlab
+测试软件：ab,smokeping,siege,JMeter,Webbench,LoadRunner,http_load（都是※）
+日志相关：syslog,rsyslog,Awstats,flume logstash scribe kafka,Zookeeper,storm，\
+		  ELK(Elasticsearch+Logstash+Kibana)-------------------------------------------------------------精ELK
+DB代理  ：mysql-proxy,amoeba（更多还是程序实现读写分离）
+搜索软件：Sphinx,Xapian,solr,elasticsearch
+项目开发: jira,confluence,gitlab,docker,redmine,ZenTao,svn,Jenkins,Testlink
+############################################
+#ssh/rsync/ansible
+#bash/sed/awk/grep、strace、tcpdump、gdb 
+#rsync+ssh
+############################################
