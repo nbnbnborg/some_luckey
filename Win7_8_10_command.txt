@@ -204,3 +204,58 @@ ODBC数据源管理器	odbccp32.cpl
 事件查看器	eventvwr.msc
 Driver Verifier Manager	verifier
 Dr. Watson系统诊断工具	drwtsn32
+
+
+系统服务命令sc
+SC来控制系统创建服务和管理服务。
+SC使用这样的语法：
+sc <server> [command] [service name] <option1> <option2>…
+下面介绍各种参数。
+1.server ：可选，可以使用双斜线，如myserver ，也可以是192.168.0.1 来操作远程计算机。如果在本地计算机上操作就不用添加任何参数。
+2.command：下面列出SC可以使用的命令
+	oconfig—-改变一个服务的配置。（长久的）
+	ocontinue–对一个服务送出一个继续控制的要求。
+	ocontrol—-对一个服务送出一个控制。
+	ocreate—-创建一个服务。（增加到注册表中）
+	odelete—-删除一个服务。（从注册表中删除）
+	oEnumDepend–列举服务的从属关系。
+	oGetDisplayName–获得一个服务的显示名称。
+	oGetKeyName–获得一个服务的服务键名。
+	ointerrogate–对一个服务送出一个询问控制要求。
+	opause—-对一个服务送出一个暂停控制要求。
+	oqc—-询问一个服务的配置。
+	oquery—-询问一个服务的状态，也可以列举服务的状态类型。
+	ostart—-启动一个服务。
+	ostop—-对一个服务送出一个停止的要求。
+3.service name：在注册表中为service key制定的名称。注意这个名称是不同于显示名称的（这个名称可以用net start和服务控制面板看到），而SC是使用服务键名来鉴别服务的。
+	特别说明 ：SC create 子命令 
+	这个命令可以在注册表和服务控制管理数据库建立一个入口。
+	使用语法如下：
+	sc <server> create [service name] [binPath= ] <option1> <option2>…
+	这里的servername，servicename，optionname，optionvalues和上面的一样，这里就option描述，通常为键值对应：option name = option values 。
+	注：键值对应 name= value，等号后面应由一个空格，不能省略
+	option 详细描述如下：
+	type=—-own, share, interact, kernel, filesys 
+	关于建立服务的类型，选项值包括驱动程序使用的类型，默认是share。
+	start=—-boot, sys tem, auto, demand, disabled 
+	关于启动服务的类型，选项值包括驱动程序使用的类型，默认是demand（手动）。
+	error=—-normal, severe, critical, ignore 
+	当服务在导入失败错误的严重性，默认是normal。
+	binPath=–(string) 
+	服务二进制文件的路径名，这里没有默认值，这个字符串是必须设置的。
+	group=—-(string) 
+	这个服务属于的组，这个组的列表保存在注册表中的ServiceGroupOrder下。默认是nothing。
+	tag=—-(string) 
+	如果这个字符串被设置为yes，sc可以从CreateService call中得到一个tagId。然而，SC并不显示这个标签，所以使用这个没有多少意义。默认是nothing
+	depend=—-(space separated string)有空格的字符串。 
+	在这个服务启动前必须启动的服务的名称或者是组。
+	obj=—-(string) 
+	账号运行使用的名称，也可以说是登陆身份。默认是localsys tem
+	Displayname=–(string) 
+	一个为在用户界面程序中鉴别各个服务使用的字符串。
+	password=–(string) 
+	一个密码，如果一个不同于localsys tem的账号使用时需要使用这个。
+	Optionvalues 
+	Optionname参数名称的数值列表。参考optionname。当我们输入一个字符串时，如果输入一个空的引用这意味着一个空的字符串将被导入。
+举例说明：在一台叫做（myserver ）的计算机上为一个叫“NewService”的服务建立的一个注册表登记，命令如下：
+sc myserver create MyService binpath= C:/NewServ.exe
