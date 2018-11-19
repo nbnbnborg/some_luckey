@@ -1,0 +1,66 @@
+你有没有这样的烦恼，连接www.google.com.hk出现无法找到服务器的情况，现在教你一个办法不再有这些烦恼。
+很多人都以为谷歌已经离开了中国，其实不然，google在中国北京还是有服务器的，而且不止一个，下面是我查到的Google北京的ip
+命令
+nslookup g.cn
+对应本地dns的ip
+Name:    g.cn
+Address: 203.208.46.209
+Name:    g.cn
+Address: 203.208.46.212
+Name:    g.cn
+Address: 203.208.46.211
+Name:    g.cn
+Address: 203.208.46.208
+Name:    g.cn
+Address: 203.208.46.210
+nslookup g.cn ns1.google.com对应的google DNS的ip
+Name:    g.cn
+Address: 203.208.46.148
+Name:    g.cn
+Address: 203.208.46.146
+Name:    g.cn
+Address: 203.208.46.144
+Name:    g.cn
+Address: 203.208.46.145
+Name:    g.cn
+Address: 203.208.46.147
+这些ip的稳定性要比hk的那个好多了，不信你可以试试。
+下面就是找到这些ip的方法：
+在
+http://support.google.com/a/bin/answer.py?hl=zh-Hans&answer=60764
+有得到google服务器IP地址段的帮助命令：
+即在命令行输入：
+nslookup -q=TXT _netblocks.google.com 8.8.8.8
+可以查看google最新的服务器IP地址段，但这里面没有大陆的IP地址段。
+所以用下面的方法获取谷歌北京公司的IP地址。
+google北京的IP地址范围是203.208.32.0 - 203.208.63.255
+
+1.先在命令行输入：nslookup g.cn
+得到的是本地dns服务器解析出的g.cn的IP地址。
+
+2.在命令行下输入：
+nslookup g.cn ns1.google.com
+得到的是使用google的dns服务器ns1.google.com解析出的g.cn的IP地址。
+google的dns服务器常见的有：
+ns1.google.com
+ns2.google.com
+ns3.google.com
+ns4.google.com
+8.8.8.8
+8.8.4.4
+
+3.如果第2步没得到正确的结果，在命令行下输入：
+nslookup -vc g.cn 8.8.8.8
+得到的是使用TCP连接方式与dns服务器8.8.8.8连接获取g.cn的IP地址。
+可以使用新浪的IP数据库查看IP地理位置和所有者的信息，比如得到的IP为203.208.46.146，
+那么可以用
+http://int.dpool.sina.com.cn/iplookup/iplookup.php?ip=203.208.46.146  
+来查看这个IP的归属。如果改成
+http://int.dpool.sina.com.cn/iplookup/iplookup.php?ip=203.208.46.0  
+则会显示相同所有者的IP地址段的信息。
+
+4.如果上述步骤都不行，可以在
+http://just-ping.com/
+输入
+g.cn
+，使用该网站的服务器得出ping结果，然后搜索带有China的结果，再用上面的新浪IP数据库查找下，就OK了。
