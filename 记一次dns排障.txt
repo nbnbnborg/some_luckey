@@ -75,6 +75,8 @@ ping translate.google.cn
 
 
 强制使用Notepad++（Administrator模式）修改Hosts文件
+
+#电信光猫就是个坑爹东西，我们要打死它
 203.208.41.55 translate.google.cn
 
 浏览器打开https://translate.google.cn
