@@ -71,6 +71,8 @@ ping translate.google.cn
 
 电信光猫，DNS劫持 牛逼！！！！！！！
 社会，社会！
+运维的QQ群友说，让电信的师傅上门，把光猫的路由功能关了，只开交换功能，再挂一个路由器，做路由（配置DNS）就行
+
 
 强制使用Notepad++（Administrator模式）修改Hosts文件
 203.208.41.55 translate.google.cn
