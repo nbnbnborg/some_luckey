@@ -1,0 +1,1268 @@
+集中化管理平台Ansible详解
+Ansible(http://www.ansibleworks.com/)一种集成IT系统的配置管理、应用部署、执行特定任务的开源平台，是AnsibleWorks公司名下的项目，该公司由Cobbler及Fune的作者于2012年创建成立。Ansible基于Python语言实现，由Paramiko和PyYAML两个关键模块构建。Ansible具有如下特点：
+	部署简单，只需在主控端部署Ansible环境，被控端无需做任何操作；
+	默认使用SSH(SecureShell)协议对设备进行管理；
+	主从集中化管理；
+	配置简单、功能强大、扩展性强；
+	支持API及自定义模块，可通过Python轻松扩展；
+	通过Playbooks来定制强大的配置、状态管理；
+	对云计算平台、大数据都有很好的支持；
+	提供一个功能强大、操作性强的Web管理界面和RESTAPI接口————AWX平台。
+	
+Ansible的架构图见图9-1,	用户通过Ansible编排引擎操作公共／私有云或CMDB（配置管理数据库）中的主机，其中Ansible编排引擎由Inventory(主机与组规则）、API、Modules(模块）、Plugins(插件）组成。
+Ansible与Saltstack最大的区别是Ansible无需在被控主机部署任何客户端代理，默认直接通过SSH通道进行远程命令执行或下发配置；相同点是都具备功能强大、灵活的系统管理、状态配置，都使用YAML格式来描述配置，两者都提供丰富的模板及API,对云计算平台、大数据都有很好的支持。Ansible在GitHub上的地址为https://github.com/ansible/,其中提供了不少配置例子供参考，本文测试的版本为l.3.2。
+
+Ansible提供了一个在线Playbook分享平台，地址：https://galaxy.ansibleworks.com,该平台汇聚了各类常用功能的角色，找到适合自己的Role(角色）后，只需要运行,ansible-galaxyinstall作者id角色包名称”就可以安装到本地，比如想安装bennojoy提供的Nginx安装与配置的角色，直接运行"ansible-galaxyinstallbennojoy.nginx"即可安装到本地，该角色的详细地址为：https://galaxy.ansibleworks.com/list#/roles/2。
+
+1.YAML语言
+YAML是一种用来表达数据序列的编程语言，它的主要特点包括：可读性强、语法简单明了、支持丰富的语言解析库、通用性强等。Ansible与Saltstack环境中配置文件都以YAML格式存在，熟悉YAML结构及语法对我们理解两环境的相关配置至关重要。下面的示例定义了在master的不同业务环境下文件根路径的描述：
+
+file roots:
+	base:
+	 - /srv/salt/
+	dev:
+	 - /srv/salt/dev
+	prod:
+	 - /srv/salt/prod
+	
+本节主要通过YAML描述与Python的对应关系，从而方便读者了解YAML的层次及结构，最常见的是映射到Python中的列表(List)、字典(Dictionary)两种对象类型。下面通过块序列与块映射的示例详细说明。
+
+1.1 块序列描述
+块序列就是将描述的元素序列到Python的列表(List)中。以下代码演示了YAML与Python的对应关系：
+import yaml
+obj = yaml.load(
+"""
+ - Hesperiidae
+ - Papilionidae
+ - Apatelodidae
+ - Epiplemidae
+""")
+print obj
+
+本例中引用"-"来分隔列表中的每个元素，运行结果如下：
+['Hesperiidae','Papilionidae','Apatelodidae','Epiplemidae']
+YAML也存在类似于Python块的概念，例如：
+-
+ - Hesperiidae
+ - Papilionidae
+ - Apatelodidae
+ - Epiplemidae
+-
+ - China
+ - USA
+ - Japan
+对应的Python结果为：
+[['Hesperiidae',	'Papilionidae',	'Apatelodidae',	'Epiplemidae'],	['China',
+,USA','Japan']]
+
+1.2块映射描述
+块映射就是将描述的元素序列到Python的字典(Dictionary)中，格式为＂键(key):值(value)",以下为YAML例子：
+hero:
+	hp:34
+	sp:8
+	level:4
+ore:
+	hp:12
+	sp:0
+	level:2
+对应的Python结果为：
+{'hero':{'hp':34,s'p':8,'level':4),'ore':{'hp':12,'sp':0,'level':21)
+当然，YAML块序列与块映射是可以自由组合在一起的，它们之间可以相互嵌套，通过非常灵活的组合，可以帮助我们描述更加复杂的对象属性，例如：
+-hero:
+	hp:34
+	sp:8
+	level:4
+-ore:
+	hp:
+	-12
+	-30
+	sp:0
+	level:2
+
+对应的Python结果为：
+[{'hero':('hp':34,'sp':8,'level':4}},{'ore':{'hp':'level':2}}]
+
+2.Ansible的安装
+Ansible只需在管理端部署环境即可，建议读者采用yum淜方式来实现部署，下面介绍具体步骤。
+
+2.1业务环境说明
+为了方便读者理解，笔者通过虚拟化环境部署了两组业务功能服务器来进行演示。笔者的操作系统版本为CentOS release6.4,自带Python 2.6.6。相关服务器信息如表1所示(CPU核数及Nginx根目录的差异化是为方便演示生成动态配置需要）：
+
+表1 业务环境表
+角色   主机名         IP          组名       Cpus WebRoot
+Master SN2013-08-020 192.168.1.20 -          -    -
+minion SN2013-08-021 192.168.1.21 webservers 2    /data
+minion SN2013-08-022 192.168.1.22 webservers 2    /data
+
+2.2安装EPEL
+由于目前RHEL官网的yum源还没有得到Ansible的安装包支持，因此先安装EPEL作为部署Ansible的默认yum源。
+RHEL(CentOS)5版本：rpm-Uvh http://mirror.pnl.gov/epel/5/i386/epel-release-5-4.noarcb.rpm
+RHEL(CentOS)6版本：rpm-Uvh http://ftp.linux.ncsu.edu/pub/epel/6/i386/epel-release-6-8.noarch.rpm
+
+2.3安装Ansible
+主服务器安装（主控端），代码如下：
+yum install ansible -y
+
+2.4Ansible配置及测试
+第一步是修改主机与组配置，文件位置/etc/ansible/hosts,格式为in.'i添加两台主机IP,同时定义两个IP到webservers组，更新的内容如下：
+【/etc/ansible/hosts】
+
+#green.example.com
+#blue.example.com
+192.168.1.21
+192.168.1.22
+
+[webservers]
+#alpha.exarnple.org
+#beta.example.erg
+192.168.1.21
+192.168.1.22
+
+通过ping模块测试主机的连通性，分别对单主机及组进行ping操作，出现如图9-2所示的结果表示安装、测试成功。
+ansible 192.168.1.21 -m ping -k 
+000000
+
+ansible webservers -m ping -k
+000000
+
+提示：由于主控端与被控主机未配置SSH证书信任，需要在执行ansible命令时添加-k参数，要求提供root(默认）账号密码，即在提示"SSHpassword:"时输入。很多人更倾向于使用Linux普通用户账户进行连接并使用sudo命令实现root权限，格式为：ansible webservers -m ping -u ansible -sudo。
+
+2.5配置Linux主机SSH无密码访问
+为了避免Ansible下发指令时输入目标主机密码，通过证书签名达到SSH无密码是一个好的方案．推荐使用ssh-keygen与ssh-copy-id来实现快速证书的生成及公钥下发，其中ssh­keygen生成一对密钥，使用ssh-copy-id来下发生成的公钥。具体操作如下。
+在主控端主机(SN2013-08-020)创建密钥，执行：ssh-keygen-t rsa,有询问直接按回车键即可，将在/root/.ssh/下生成一对密钥．其中id_rsa为私钥，id_rsa.pub为公钥（需要下发到被控主机用户.ssh目录，同时要求重命名成authorized_keys文件）。
+接下来同步公钥文件id_rsa.pub到目标主机，推荐使用ssh-copy-id公钥拷贝工具，命令格式：/usr/bin/ssh-copy-id [-i [identity_file]] [user@]machine。本示例中我们输入以下命令同步公钥至192.168.1.21和192.168.1.22主机。
+#ssh-copy-id -i /root/.ssh/id_rsa.pub root@192.168.1.21
+#ssh-copy-id -i /root/.ssh/id_rsa.pub root@192.168.1.22
+校验SSH无密码配置是否成功，运行ssh root@192.168.1.21,如直接进入目标root账号提示符，则说明配置成功。
+
+3.定义主机与组规则
+Ansible通过定义好的主机与组规则(Inventory)对匹配的目标主机进行远程操作，配置规则文件默认是/etc/ansible/hosts。
+3.1定义主机与组
+所有定义的主机与组规则都在/etc/ansible/hosts文件中，为ini文件格式，主机可以用域名、IP、别名进行标识，其中webservers、dbservers为组名，紧跟着的主机为其成员。格式如下：
+mail.example.com
+192.168.1.21:2135
+
+[webservers]
+foo.example.com
+bar.example.com
+192.168.1.22
+
+[dbservers]
+one.example.com
+two.example.com
+three.exarnple.com
+192.168.1.23
+
+其中，192.168.1.21:2135的意思是定义一个SSH服务端口为2135的主机，当然我们也可以使用别名来描述一台主机，如：
+jumperansible_ssh_port=22ansible_ssh_host=192.168.1.50
+jumper为定义的一个别名，ansible_ssh_port为主机SSH服务端口，ansible_ssh_host为目标主机，更多保留主机变量如下：
+ansible_ssh_host,连接目标主机的地址。
+ansible_ssh_port,连接目标主机SSH端口，端口22无需指定。
+ansible_ssh_user,连接目标主机默认用户。
+ansible_ssh_pass,连接目标主机默认用户密码。
+ansible_connection,目标主机连接类型，可以是local、ssh或paramiko。
+ansible_ssh_private_key_file,连接目标主机的ssh私钥。
+ansible_*_interpreter,指定采用非Python的其他脚本语言，如Ruby、Perl或其他类似ansible_python_interpreter解释器。
+
+组成员主机名称支持正则描述，示例如下：
+[webservers]
+www[01:50].example.com
+[databases]
+db-[a:f].example.com
+
+3.2定义主机变量
+主机可以指定变量，以便后面供Playbooks配置使用，比如定义主机hosts1及hosts2上Apache参数http_port及maxRequestsPerChild,目的是让两台主机产生Apache配置文件httpd.conf差异化，定义格式如下：
+[atlanta]
+host1 http_port=80 maxRequestsPerChild=808
+host2 http_port=303 maxRequestsPerChild=909
+
+3.3定义组变量
+组变量的作用域是覆盖组所有成员，通过定义一个新块，块名由组名+":vars"组成，定义格式如下：
+[atlanta]
+host1
+host2
+
+[atlanta:vars]
+ntp_server=ntp.atlanta.example.com
+proxy=proxy.atlanta.example.com
+
+同时Ansible支持组嵌套组，通过定义一个新块，块名由组名+":children"组成，格式如下：
+[atlanta]
+host1
+host2
+
+[raleigh]
+host.2
+host3
+
+[southeast:children]
+atlanta
+raleigh
+
+[southeast：vars]
+some_server=foo.southeast.example.com
+halon_system_timeout=30
+self_destruct_countdown=60
+escape_pods=2
+
+[usa:children]
+southeast
+northeast
+southwest
+southeast
+
+提示：嵌套组只能使用在/usr/bin/ansible-playbook中，在/usr/bin/ansible中不起作用。
+
+3.4分离主机与组特定数据
+为了更好规范定义的主机与组变量，Ansible支待将/etc/ansible/hosts定义的主机名与组变量单独剥离出来存放到指定的文件中，将采用YAML格式存放，存放位置规定："/etc/ansible/group_vars/+组名“和"/etc/ansible/host_vars/+主机名“分别存放指定组名或主机名定义的变量，例如：
+/etc/ansible/group_vars/dbservers
+/etc/ansible/group_vars/webservers
+/etc/ansible/host_vars/foosball
+定义的dbservers变量格式为：
+[/etc/ansible/group_vars/dbservers]
+ntp_server:acme.example.org
+database_server:storage.example.org
+
+在ansible 1.2及以后版本中，group_vars/和bost_vars/目录可以保存在playbook目录或inventory目录，如同时存在，inventory目录的优先级高于playbook目录的。
+
+4.匹配目标
+在3节中已经完成主机与组的定义，本节将讲解如何进行目标(Patterns)匹配，格式为：ansible <pattern_goes_here> -m <module_name> -a <arguments>。举例说明：重启webservers组的所有Apache服务。
+ansible webservers -m service -a "name=httpdstate=restarted"
+本节将重点介绍<pattern_goes_here>参数的使用方法，详细规则及含义见表2。
+
+表2	匹配目标主机规则表
+规则                                             含义
+192.198.1.2或one.example.com	匹配目标IP地址或主机名，多个IP或主机名使用":"号分隔
+webservers                     	匹配目标组为webservers,多个组使用":"号分隔
+All或'*'                     匹配目标所有主机
+-(web|db).*\.example\.com或192.168.1.*	支持正则表达式匹配主机或IP地址
+webservers:!192.168.1.22	匹配webservers组且排除192.168.1.22主机lP
+webservers:&dbservers    	匹配webservers与dbservers两个群组的交集
+webservers:!{{excluded}}:&{{required}}	支持变量匹配方式
+
+5.Ansible常用模块及API
+Ansible提供了非常丰富的功能模块，包括Cloud(云计算）、Commands(命令行）、Database(数据库）、Files(文件管理）、Internal(内置功能）、Inventory(资产管理）、Messaging(消息队列）、Monitoring(监控管理）、Net Infrastructure(网络基础服务）、Network(网络管理）、Notification(通知管理）、Packaging(包管理）、Source Control(版本控制）、System(系统服务）、Utilities(公共服务）、Web Infrastructure(Web基础服务），等等，更多模块介绍见官网模块介绍（网址：http://ansibleworks.com/docs/modules.html)。模块默认存储目录为/usr/share/ansible/,存储结构以模块分类名作为目录名，模块文件按分类存放在不同类别目录中。命令行调用模块格式：ansible <pattern_goes_here(操作目标）> -m <module_name(模块名)> -a <module_args(模块参数)＞，其中默认的模块名为command,即"-mcommand"可省略。获取远程webservers组主机的uptime信息格式如图3所示。
+
+图3 获取主机"uptime"信息
+ansible webservers -m command -a "uptime"
+
+以上命令等价于ansible webservers -a "uptime",获得模块的帮助说明信息格式：ansible­doc <模块名＞，得到ping模块的帮助说明信息如图4所示。
+
+图4 ping模块帮助信息
+ansible­doc ping
+
+在playbooks中运行远程命令格式如下：
+- name: reboot the servers
+  action: command /shin/reboot -t now
+
+Ansible0.8或以上版本支持以下格式：
+- name: reboot the servers
+  command: /sbin/reboot -t now
+Ansible提供了非常丰富的模块，涉及日常运维工作的方方面面。下面介绍Ansible的常用模块，更多模块介绍见官方说明。
+
+5.1.远程命令模块
+(1)功能
+模块包括command、script、shell,都可以实现远程shell命令运行。command作为Ansible的默认模块，可以运行远程权限范围所有的shell命令；script功能是在远程主机执行主控端存储的shell脚本文件，相当于scp+shell组合；shell功能是执行远程主机的shell脚本文件。
+
+(2)例子
+ansible webservers -m command -a "free -m"
+ansible webservers -m script -a "/home/test.sh 12 34"
+ansible webservers -m shell -a "/home/test.sh"
+
+5.2.copy模块
+(1)功能
+实现主控端向目标主机拷贝文件，类似于scp的功能。
+(2)例子
+以下示例实现拷贝/home/test.sh文件至webserver组目标主机/tmp/目录下，并更新文件
+属主及权限（可以单独使用file模块实现权限的修改，格式为：path=/etc/foo.conf owner=foo group=foo mode=0644)。
+#ansible webservers -m copy -a "src=/home/test.sh dest=/tmp/ owner=root group=root mode=0755"
+
+5.3.stat摸块
+(1)功能
+获取远程文件状态信息，包括atime、ctime、mtime、md5、uid、gid等信息。
+(2)例子
+ansible webservers -m stat -a "path=/etc/sysctl.conf"
+
+5.4.get_url摸块
+(1)功能
+实现在远程主机下载指定URL到本地，支持sha256sum文件校验。
+(2)例子
+ansible webservers -m get_url -a "url=http://www.baidu.com dest=/tmp/index.html mode=0440 force=yes"
+
+5.5.yum模块
+(1)功能
+Linux平台软件包管理操作，常见有yum、apt管理方式。
+(2)例子
+ansible webservers -m apt -a "pkg=curl state=latest"
+ansible webservers -m yum -a "name=curl state=latest”
+
+5.6.cron模块
+(1)功能
+远程主机crontab配置。
+(2)例子
+ansible webservers -m cron -a "name='check dirs' hour='5,2' job='ls -alh > /dev/null'"
+效果如下：
+#Ansible: check dirs
+* 5,2 * * * ls-alh > /dev/nullsalt '*' file.chown /etc/passwd root root
+
+5.7.mount模块
+(1)功能
+远程主机分区挂载。
+(2)例子
+ansible webservers -m mount -a "name=/mnt/data src=/dev/sd0 fstype=ext3 opts=ro state=present"
+
+5.8.service模块
+(1)功能
+远程主机系统服务管理。
+(2)例子
+ansible webservers -m service -a "name=nginx state=stopped"
+ansible webservers -m service -a "name=nginx state=restarted"
+ansible webservers -m service -a "name=nginx state=reloaded"
+
+5.9.sysctl包管理模块
+(1)功能
+远程Linux主机sysctl配置。
+(2)例子
+sysctl: name=kernel.panic value=3 sysctl_file=/etc/sysctl.conf checks=before reload=yessalt '*' pkg.upgrade
+
+5.10.user服务模块
+(1)功能
+远程主机系统用户管理。
+(2)例子
+#添加用户test
+ansible webservers -m user -a "name=test comment='test'"
+#删除用test
+ansible webservers -m user -a "name=test state=absent remove=yes" 
+
+提示:playbooks模块调用格式如下，以command模块为例(0.8或更新版本格式）：
+-name: reboot the servers
+  command: /shin/reboot -t now
+
+6.playbook 介绍
+playbook是一个不同于使用Ansible命令行执行方式的模式，其功能更强大灵活。简单来说，playbook是一个非常简单的配置管理和多主机部署系统，不同千任何已经存在的模式，可作为，-个适合部署复杂应用程序的基础。playbook可以定制配置，可以按指定的操作步骤有序执行，支持同步及异步方式。官方提供了大最的例子，可以在https://github.com/ansible/ansible-examples找到。playbook是通过YAML格式来进行描述定义的，可以实现多台主机应用的部署，定义在webservers及dbservers组上执行特定指令步骤。下面为读者介绍一个基本的playbook示例：
+【 /home/test/ansible/playbooks/nginx.yml 】
+
+---
+- hosts: webservers
+  vars:
+    worker_processes: 4
+    num_cpus: 4
+    max_open_file: 65506
+    root: /data
+  remote_user: root
+  tasks:
+  - name: ensure nginx is at the latest version
+    yum: pkg=nginx state=latest
+  - name: write the nginx config file
+    template: src=/home/test/ansible/nginx/nginx2.conf dest=/etc/nginx/nginx.conf
+    notify:
+    - restart nginx
+  - name: ensure nginx is running
+    service: name=nginx state=started
+  handlers:
+    - name: restart nginx
+      service: name=nginx state=restarted
+
+以上playbook定制了一个简单的Nginx软件包管理，内容包括安装、配置模板、状态管理等。下面详细对该示例进行说明。
+
+6.1定义主机与用户
+在playbook执行时，可以为主机或组定义变量，比如指定远程登录用户。以下为
+webservers组定义的相关变量，变量的作用域只限于webservers组下的主机。
+- hosts: webservers
+  vars:
+    worker_processes: 4
+    num_cpus: 4
+    max_open_file: 65506
+    root: /data
+  remote_user: root
+
+hosts参数的作用为定义操作的对象，可以是主机或组，具体定义规则见3.1节内容。本示例定义操作主机为webservers组，同时通过vars参数定义了4个变量（配置模板用到），其中remote_user为指定远程操作的用户名，默认为root账号，支待sudo方式运行，通过添加sudo:yes即可。注意，remote_user参数在Ansible1.4或更高版本才引入。
+
+6.2任务列表
+所有定义的任务列表(tasks list),playbook将按定义的配置文件自上而下的顺序执行，定义的主机都将得到相同的任务，但执行的返回结果不一定保持一致，取决于主机的环境及程序包状态。建议每个任务事件都要定义一个name标签，好处是增强可读性，也便于观察结果输出时了解运行的位置，默认使用action(具体的执行动作）来替换name作为输出。下面是一个简单的任务定义示例：
+  tasks:
+    -name:make srue nginx is running
+      service: name=nginx state=running
+功能是检测Nginx服务是否为运行状态，如没有则启动。其中name标签对下面的action(动作）进行描述；action(动作）部分可以是Ansible的任意模块，具体见5节，本例为services模块，参数使用key=value的格式，如"name=httpd",在定义任务时也可以引用变量，格式如下：
+  tasks:
+    -name: create a virtual host file for {{ vhost }}
+      template: src=somefile.j2 dest=/etc/httpd/conf.d/{{vhost}}
+在playbook可通过template模块对本地配置模板文件进行渲染并同步到目标主机。以nginx配置文件为例，定义如下：
+  - name: write the nginx config file
+    template: src=/home/test/ansible/nginx/nginx2.conf dest=/etc/nginx/nginx.confnotify:
+    - restart nginx
+其中，"src=/home/test/ansible/nginx/nginx2.conf"为管理端模板文件存放位置，"dest=/etc/nginx/nginx.conf"为目标主机nginx配置文件位置，通过下面nginx模板文件可以让大家对模板的定义有个基本的概念。
+【 /home/test/ansible/nginx/nginx2.conf 】
+user nginx;
+worker_processes {{ worker_processes }};
+{% if num_cpus == 2 %}
+worker_cpu_affinity 01 10;
+{% elifnum_cpus == 4 %}
+worker_cpu_affinity 1000 0100 0010 0001;
+{% elifnum_cpus >= 8 %）
+worker_cpu_affinity 00000001 00000010 00000100 00001000 00010000 00100000 01000000 10000000;
+{% else %}
+worker_cpu_affinity 1000 0100 0010 0001;
+{% endif %}
+worker_rlimit_nofile {{ max_open_file }};
+... ...
+
+Ansible会根据定义好的模板渲染成真实的配置文件，模板使用YAML语法，详细见9.1
+节，最终生成的nginx.conf配置如下：
+user nginx;
+worker_processes 4;
+worker_cpu_affinity 1000 0100 0010 0001;
+worker_rlimit_nofile 65506;
+... ...
+
+当目标主机配置文件发生变化后，通知处理程序(Handlers)来触发后续的动作，比如重启nginx服务。Handlers中定义的处理程序在没有通知触发时是不会执行的，触发后也只会运行一次。触发是通过Handlers定义的name标签来识别的，比如下面notify中的"restart nginx"与handlers中的"name: restart nginx''保持一致。
+    notify:
+    - restart nginx
+  handlers:
+  - name: restart nginx
+    service: narne=nginx state=restarted
+
+6.3执行playbook
+执行playbook,可以通过ansible-playbook命令实现，格式：ansible-playbook playbook file(.yml)[参数］，如启用10个并行进程数执行playbook:
+#ansible-playbook /home/test/ansible/playbooks/nginx.yml -f 10,
+其他常用参数说明：
+ -u REMOTE_USER: 手工指定远程执行playbook的系统用户；
+ --syntax-check: 检查playbook的语法；
+ --list-hosts playbooks: 匹配到的主机列表；
+ 	-T TIMEOUT: 定义playbook执行超时时间；
+ --step: 以单任务分步骤运行，方便做每一步的确认工作。
+更多参数说明运行ansible-playbook-help来获得。
+
+7.playbook角色与包含声明
+我们写一个非常大的playbook时，想要复用些功能显得有些吃力，还好Ansible支待写playbook时拆分成多个文件、通过包含(include)的形式进行引用，我们可以根据多种维度进行“封装”，比如定义变量、任务、处理程序等。
+角色建立在包含文件之上，抽象后更加清晰、可复用。运维人员可以更专注千整体，只有在需要时才关注具体细节。Ansible官方在GitHub上提供了大最的示例供大家参考借鉴，访问地址https://github.com/ansible/ansible-examples即可获相应的学习资料。
+
+7.1包含文件，鼓励复用
+业多个playbook涉及复用的任务列表时，可以将复用的内容剥离出，写到独立的文件中，最后在需要的地方include进来即可，示例如下：
+【tasks/foo.yml】
+---
+# possibly saved as tasks/foo.yml
+- name: placeholder foo
+  command: /bin/foo
+- name: placeholder bar
+  command: /bin/bar
+然后就可以在使用的playbook中include进来如：
+tasks:
+- include: tasks/foo.yml
+当然，也可以将变量传递到包含文件当中，这称为“参数包含"。
+如在部署多个Word.Press的情况下，可以根据不同用户单独部署WordPress的任务，且引用单个wordpress.yml文件，可以这样写：
+tasks:
+  - include: wordpress.yml user=timmy
+  - include: wordpress.yml user=alice
+  - include: wordpress.yml user=bob
+注意，1.4或更高版本可支持以Python的字典、列表的传递参数形式，如：
+tasks:
+ -{ include: wordpress.yml, user: timmy, ssh_keys: ['keys/one.txt','keys/two.txt']}
+使用这两种方法都进行变量传递，然后在包含文件中通过使用{{ user }}进行变量引用。
+将处理程序(handlers)放到包含文件中是一个好的做法，比如重启Apache的任务，如下：
+【 handlers/handlers.yml 】
+---
+# this might be in a file like handlers/handlers.yml
+- name: restart apache
+  service: name=apache state=restarted
+需要时可以进行引用，像这样：
+handlers:
+  - include: handlers/handlers.yml
+
+7.2角色
+现在我们已经了解了变量、任务、处理程序的定义，有什么方法更好地进行组织或抽象，让其复用性更强、功能更具模块化？答案就是角色。角色是Ansible定制好的一种标准规范，以不同级别目录层次及文件对角色、变量、任务、处理程序等进行拆分，为后续功能扩展、可维护性打下基础。一个典型角色目录结构的示例如下：
+site.yml
+webservers.yml
+fooservers.yml
+  roles/
+    common/
+      files/
+      templates/
+      tasks/
+      handlers/
+      vars/
+      meta/
+    webservers/
+      files/
+      templates/
+      tasks/
+      handlers/
+      vars/
+      meta/
+
+在playbook是这样引用的：
+【 site.yml 】
+---
+- hosts: webservers
+  roles:
+    - common
+    - webservres
+角色定制以下规范，其中x为角色名。
+如roles/x/tasks/main.yml文件存在，其中列出的任务将被添加到执行队列；
+如roles/x/handlers/main.yml文件存在，其中所列的处理程序将被添加到执行队列；
+如roles/x/vars/main.yml文件存在，其中列出的变量将被添加到执行队列；
+如roles/x/meta/main.yml文件存在，所列任何作用的依赖关系将被添加到角色的列表(1.3及更高版本）；
+任何副本任务可以引用roles/x/files/无需写路径，默认相对或绝对引用；任何脚本任务可以引用roles/x/files/无需写路径，默认相对或绝对引用；
+任何模板任务可以引用文件中的roles/x/templates/无需写路径，默认相对或绝对引用。
+
+为了便于大家更好地理解和使用角色(role),对6节中的nginx软件包管理的playbook（独立文件）修改成角色的形式，同时添加了一个公共类角色common,从角色全局作用域中抽取出公共的部分，一般为系统的基础服务，比如ntp、iptables、selinux、sysctl等。本示例是针对ntp服务的管理。
+
+(1)playbook目录结构
+playbook目录包括变量定义目录group_vars、主机组定义文件hosts、全局配置文件site.
+yml、角色功能目录，playbook目录结构可参考图5。
+【 /home/test/ansible/playbooks/nginx 】
+(2)定义主机组
+以下定义了一个业务组webservers,成员为两台主机。
+【 nginx/hosts 】
+[webservers]
+192.168.1.21
+192.168.1.22
+非必选配置，默认将引用/etc/ansible/hosts的参数，角色中自定义组与主机文件将通过"-i file"命令行参数调用，如ansible-playbook -i hosts来调用。
+tree nginx
+ nginx
+│  site.ymll
+├─group_vars
+│  ├─all
+│  └─webservers
+├─hosts
+└─roles
+    ├─common
+    │  ├─handlers
+    │  │      main.yml
+    │  ├─templates
+    │  │      ntp.conf.j2
+    │  ├─tsaks
+    │  │      main.yml
+    │  └─vars
+    │          main.yml
+    └─web
+        ├─handlers
+        │      main.yml
+        ├─templates
+        │      nginx2.conf
+        └─tsaks
+                main.yml
+
+(3)定义主机或组变擞
+定义规则见3节所述，group_vars为定义组变量目录，目录当中的文件名要与组名保持一致，组变量文件定义的变量作为域只受限千该组，all代表所有主机。
+【 nginx/group_vars/all 】
+---
+#Variables lised here are applicable to all host groups
+ntpserver: ntp.sjtu.edu.cn
+
+【 nginx/group_vars/webservers 】
+---
+worker_processes: 4
+num_cpus: 4
+max_open_file: 65536
+root: /data
+
+(4)全局配置文件site.yml
+下面的全局配置文件引用了两个角色块，角色的应用范围及实现功能都不一样：
+【 nginx/site.yml 】
+---
+- name: apply common configuration to all nodes
+  hosts: all
+  roles:
+    - common
+- name: configure and deploy the webservers and application code
+  hosts: webservers
+  roles:
+    - web
+全局配置文件site.yml引用了两个角色，一个为公共类的common，另一个为web类，分別对应nginx/common、nginx/web目录。以此类推，可以引用更多的角色，如db、nosql、hadoop等，前提是我们先要进行定义，通常情况下一个角色对应着一个特定功能服务。通过hosts参数来绑定角色对应的主机或组。
+
+(5)角色common的定义
+角色common定义了handlers、tasks、templates、vars4个功能类，分别存放处理程序、任务列表、模板、变量的配置文件main.yml,需要注意的是，vars/main.yml中定义的变量优先级高于/nginx/group_vars/all，可以从ansible-playbook的执行结果中得到验证。各功能块配置文件定义如下：
+【 handlers/main.yml 】
+- name: restart ntp
+  service: name=ntpd state=restarted
+【 tasks/main.yml 】
+- name: Install ntp
+  yum: name=ntp state=present
+- name: Configure ntp file
+  template: src=ntp.conf.j2 dest=/etc/ntp.confnotify:restartntp
+- name: Start the ntp service
+  service: name=ntpd state=started enabled=true
+- name: test to see if selinux is running 
+  command: getenforce
+  register: sestatus
+  changed_when: false
+其中template:src=ntp.conf.j2引用模板时无需写路径，默认在上级的templates目录中查找。
+【 templates/ntp,conf.j2 】
+driftfile /var/lib/ntp/drift
+restrict 127.0.0.1
+restrict -6::1
+
+server {{ ntpserver }}
+
+includefile /etc/ntp/crypto/pw
+keys /etc/ntp/keys
+此处{{ ntpserver }}将引用vars/main.yml定义的ntpserver变量。
+
+【 vars/main.yml 】
+---
+#Variables listed here are applicable to all host groups
+ntpserver: 210.72.145.44
+
+(6)角色web的定义
+角色web定义了handlers、tasks、templates三个功能类，基本上是6节中的nginx管理playbook对应定义功能段打散后的内容。具体功能块配置文件定义如下：
+【 handlers/main.yml 】	-
+- name: restart nginx
+  service: name=nginx state=restarted
+【 tasks/main.yml 】
+- name: ensure nginx is at the latest version
+  yum: pkg=nginx state=latest
+- name: write the nginx config file
+  template: src=nginx2.conf dest=/etc/nginx/nginx.conf
+notify:
+- restart nginx
+- name: ensure nginx is running
+  service: name=nginx state=started
+【templates/nginx2.conf】
+user nginx;
+worker_processes {{ worker_processes }};
+{% if num_cpus == 2 %}
+worker_cpu_affinity 01 10;
+{% elif num_cpus == 4 %}
+worker_cpu_affinity 1000010000100001;
+{% elif num_cpus >= 8 %]
+worker_cpu_affinity 00000001 00000010 00000100 00001000 00010000 01000000 10000000;
+(% else %}
+worker_cpu_affinity 1000 0100 0010 0001;
+{% endif %}
+worker_rlimit_nofile {{ max_open_file }};
+... ...
+
+具体web角色定义细节将不展开描述，可参考6节及common角色的说明。
+
+(7)运行角色
+#cd /home/test/ansible/playbooks/nginx
+#ansible-playbook -i hosts site.yml -f 10
+运行结果如图6与图7所示。
+
+TASK:[Install ntp]
+ok:[192.168.1.21]
+ok:[192.168.1.22]
+
+TASK:[Configure ntp file]
+change:[192.168.1.21]
+change:[192.168.1.22]
+
+TASK:[Start the ntp service]
+ok:[192.168.1.21]
+ok:[192.168.1.22]
+图6ntp部署片段
+
+TASK:[ensure nginx is at latest version]
+ok:[192.168.1.22]
+ok:[192.168.1.21]
+
+TASK:[write the nginx config file]
+ok:[192.168.1.22]
+ok:[192.168.1.21]
+
+TASK:[ensure nginx is runing]
+ok:[192.168.1.22]
+ok:[192.168.1.21]
+
+PLAY RECAP
+192.168.1.21          : ok=9 changed=2 unreachable=0 failed=0
+192.168.1.22          : ok=9 changed=2 unreachable=0 failed=0
+图7nginx部署片段
+
+8.获取远程主机系统信息：Facts
+Facts是一个非常有用的组件，类似于Saltstack的Grains功能，实现获取远程主机的系统信息，包括主机名、IP地址、操作系统、分区信息、硬件信息等，可以配合playbook实现更加个性化、灵活的功能需求，比如在httpd.conf模板中引用Facts的主机名信息作为ServerNatne参数的值。通过运行ansiblehostname-msetup可获取Facts信息，例如，获取192.168.1.21的Facts信息需运行：ansible 192.168.1.21 -m setup,结果如下：
+192.168.1.21 | success >> {
+    "ansible_facts":	{
+        "ansible_all_ipv4_addresses’，：[
+            "192.168.1.21"
+        ],
+        "ansible_all_ipv6_addresses":[
+            "fe80::250:56ff:fe28:632d"
+        ],
+        "ansible_architecture":"x86_64",
+        "ansible_bios_date":"07/02/2012"，
+        "ansible_bios_version":"6.00",
+        "ansible_cmdline":{
+            "KEYBOARDTYPE":"pc",
+            "KEYTABLE":"us",
+            "LANG":"en_US.UTF-8",
+            "SYSFONT":"latarcyrheb-sunl6",
+            "quiet":true,
+            "rd_NO_DM":true,
+            "rd_NO_LUKS":true,
+            "rd_NO_LVM":true,
+            "rd_NO_MD":true,
+            "rhgb":true,
+            "ro":true,
+            "root":"UOID=b8d29324-57b2-4949-8402-7fd9ad64ac5a"
+    },
+......
+
+在模板文件中这样引用Facts信息:
+{{ ansible_devices.sda.model }}
+{{ ansible_hostname }}
+
+9.变量
+在实际应用场景中.我们希望一些任务、配置根据设备性能的不同而产生差异，比如使用本机CPU核数动态配置Nginx的worker_processes参数，可能有一组主机的应用配置文件几乎相同，但略有不同的配置项可以引用变量。在Ansible中使用变量的目的是方便处理系统之间的差异。
+变量名的命名规则由字母、数字和下划线组合而成，变量必须以字母开头，如"foo_port"是一个合法的变量，"foo5"也是可以的，''foo-port"、"foo port"、"foo.port"和"12"都是非法的变量命名。在Inventory中定义变量见3.2节和3.3节，在playbook定义变量见6节，建议回顾一下，加深记忆。
+
+9.1Jinja2过滤器
+Jinja2是Python下一个广泛应用的模板引擎，它的设计思想类似于Django的模板引擎，并扩展了其语法和一系列强大的功能，官网地址：http://jinja.pocoo.org/。下面介绍一下Ansible使用Jinja2强大的过滤器(Filters)功能。
+使用格式：{{ 变量名 I 过滤方法 }}。
+下面是实现获取一个文件路径变量过滤出文件名的一个示例：
+{{ path I basename }}
+获取文件所处的目录名：
+{{ path I dirname }}
+下面为一个完整的示例，实现从"/etc/profile"中过滤出文件名"profile",并输出重定向到/tmp/testshell文件中。
+---
+- hosts: 192.168.1.21
+  vars:
+    filename: /etc/profile
+  tasks:
+    - name: "shelll"
+      shell: echo {{ filename I basename }} >> /tmp/testshell
+更多的过滤方法见http://jinja.pocoo.org/docs/templates/#builtin-filters。
+
+9.2本地Facts
+我们可以通过Facts来获取目标主机的系统信息，当这些信息还不能满足我们的功能需求时，可以通过编写自定义的Facts模块来实现。当然，还有一个更简单的实现方法，就是通过本地Facts来实现。只需在目标设备/etc/ansible/facts.d目录定义JSON、INI或可执行文件的JSON输出，文件扩展名要求使用".fact'',这些文件都可以作为Ansible的本地Facts,例如，在目标设备192.168.1.21定义三个变量，供以后playbook进行引用。
+【 /etc/ansible/facts.d/preferences.fact 】
+[general]
+max_memory_size=32
+max_user_processes=3730
+open_files=65535
+
+在主控端运行ansible 192.168.1.21 -m setup -a "filter=ansible_local"可看到定义的结果，返回结果如下：
+192,168.1.21 | success » {
+    "ansible_facts": {
+        "ansible_local": {
+            "preferences": {
+                "general": {
+                    "max_memory_size": "32",
+                    "max_user_processes": "3730",
+                    "open_files": "65535"
+                }
+            }
+        }
+    },
+    "changed": false
+}
+注意返回JSON的层次结构，preferences(facts文件名前缀）一>general（INI的节名）
+—>key:value (INI的键与值)，最后就可以在我们的模板或playbook中通过以下方式进行调用:
+{{ ansible_local.preferences.general.open_files }}
+
+9.3注册变量
+变量的另一个用途是将一条命令的运行结果保存到变量中，供后面的playbook使用。下 面是一个简单的示例：
+- hosts: web_servers
+  tasks:
+      - shell: /usr/bin/foo
+        register: foo_result
+        ignore_errors: True
+      - shell: /usr/bin/bar
+        when: foo_result.rc == 5
+上述示例注册了一个foo_result变量，变量值为shell: /usr/bin/foo的运行结果，ignore_errors: True为忽略错误。变量注册完成后，就可以在后面playbook中使用了，当条件语句when: foo_result.rc = 5成立时，shell: /usr/bin/bar命令才会运行，其中foo_result.rc为返回/usr/bin/foo的resultcode(返回码）。图8返回“rc=0”的返回码。
+
+[root@SN2013-08-020 ~]ansible 192.168.1.21 -m command -a "echo 'This certainly is eplc'"
+192,168.1.21 丨 success 丨 rc=0 >>
+This certainly is epic
+图8 命令执行结果
+
+10.条件语句
+有时候一个playbook的结果取决于一个变量，或者取决于上一个任务（task)的执行结果值，在某些情况下，一个变量的值可以依赖于其他变量的值，当然也会影响Ansible的执行过程。
+下面主要介绍When声明。
+有时候我们想跳过某些主机的执行步骤，比如符合特定版本的操作系统将不安装某个软件包，或者磁盘空间爆满了将进行清理的步骤。在Ansible中很容易做到这一点，通过When子句实现，其中将引用Jinja2表达式。下面是一个简单的示例：
+tasks:
+    - name: "shutdown Debian flavored systems"
+      command: /sbin/shutdown -t now
+      when: ansible_os_family == "Debian"
+通过定义任务的Facts本地变量ansible_os_family(操作系统版本名称）是否为Debian,结果将返回BOOL类型值，为True时将执行上一条语句command: /sbin/shutdown -t now,为False时该条语句都不会触发。我们再看一个示例，通过判断一条命令执行结果做不同分支的二级处理。
+tasks:
+    - command: /bin/false
+      register: result
+      ignore_errors: True
+    - command: /bin/something
+      when: result|failed
+    - command: /bin/something_else
+      when: result|success
+    - command: /bin/still/something_else
+      when: result|skipped
+"when: result|success"的意思为当变量result执行结果为成功状态时，将执行/bin/something_else命令，其他同理，其中success为Ansible内部过滤器方法，返回Ture代表命令运行成功。
+
+11.循环
+通常一个任务会做很多事情，如创建大量的用户、安装很多包，或重复轮询特定的步 骤，直到某种结果条件为止，Ansible为我们提供了此支持。下面是一个简单的示例：
+- name: add several users
+  user: name={{ item }} state=present groups=wheel
+  with_items:
+    - testuser1
+    - testuser2
+这个示例实现了一个批量创建系统用户的功能，with_items会自动循环执行上面的语句“user: name={{ item }} state=present groups=wheel”，循环的次数为with_items的元素个数，这里有2个元素，分别为testuser1、testuser2，会分別替换{{ item }}项。这个示例与下面的示例是等价的：
+- name: add user testuser1
+  user: name=testuser1 state=present groups=wheel
+-name: add user testuser2
+  user: name=testuser2 state=present groups=wheel
+
+当然，元素也支持字典的形式，如下：
+- name: add several users
+  user: name={{ item.name }} state=present groups={{ item.groups }}
+  with_items:
+    - { name: 'testuser1', groups: 'wheel' }
+    - { name: 'testuser2', groups: 'root' }
+
+循环也支持列表（List)的形式，不过是通过with_flattened语句来实现的，例如:
+---
+# file: roles/foo/vars/main.yml
+packages_base:
+  -[ 'foo-package','bar-package' ]
+packages_apps:
+  -[ ['one-package','two-package'] ]
+  -[ ['red-package'],['blue-package'] ]
+以上定义了两个列表变量，分别是需要安装的软件包名，以便后面进行如下引用:
+- name: flattened loop demo
+  yum: name={{ item }} state=instailed
+  with flattened:
+       - packages_base
+       - packages_apps
+通过便用with_flattened语句循环引用定义好的列表变量。
+
+12.示例讲解
+官网提供的Haproxy+LAMP+Nagios经典示例，也是目前国内最常用的技术架构，此案例访问地址为：https://github.com/ansible/ansible-examples/tree/master/lamp_haproxy。下面将对该示例进行详细说明，内容覆盖前面涉及的几乎所有知识点，起到温故的作用，同时作为对Ansible的总结内容。
+下面介绍playbook的基本信息。
+1.目录结构
+示例playbook目录结构见图9。
+tree lamp_haproxy/
+│  hosts
+│  site.yml
+├─group_vars
+│      all
+│      dbservers
+│      lbservers
+│      webservers
+└─roles
+    ├─base-apache
+    │  └─tasks
+    │          main.yml
+    ├─common
+    │  ├─files
+    │  │      epel.repo
+    │  │      RPM-GPG-KEY-EPEL-6
+    │  ├─handlers
+    │  │      main.yml
+    │  ├─tasks
+    │  │      main.yml
+    │  └─templates
+    │          iptables.j2
+    │          ntp.conf.j2
+    ├─db
+    │  ├─handlers
+    │  │      main.yml
+    │  ├─tasks
+    │  │      main.yml
+    │  └─templates
+    │          my.cnf.j2
+    ├─haproxy
+    │  ├─handlers
+    │  │      main.yml
+    │  ├─tasks
+    │  │      main.yml
+    │  └─templates
+    │          haproxy.cfg.j2
+    ├─nagios
+    │  ├─files
+    │  │      ansible-managed-services.cfg
+    │  │      localhost.cfg
+    │  │      nagios.cfg
+    │  ├─handlers
+    │  │      main.yml
+    │  ├─tasks
+    │  │      main.yml
+    │  └─templates
+    │          dbservers.cfg.j2
+    │          lbservers.cfg.j2
+    │          webservers.cfg.j2
+    └─web
+        └─tasks
+                main.yml
+图9示例目录结构
+
+2.设备环境说明
+两台Web主机、1台数据库主机、1台负载均衡器主机、1台监控主机，hosts配置如下:
+【 hosts 】
+[webservers]
+web1
+web2
+
+[dbservers]
+db1
+
+[lbservers]
+lb1
+
+[monitoring]
+nagios
+3.palybook入口文件site.yml
+需要注意的是base-apache角色，由于webservers及monitoring都需要部署Apache环 境，为提高复用性，将部署Apache独立成base-apache角色。
+【 Site.yml 】
+- hosts: all
+  roles:
+  - common
+
+- hosts: dbservers
+  user: root
+  roles:
+  - db
+
+- hosts: webservers
+  user: root
+  roles:
+  - base-apache
+  - web
+
+- hosts: lbservers
+  user: root
+  roles:
+  - haproxy
+
+- hosts: monitoring
+  user: root
+  roles:
+  - base-apache
+  - nagios
+
+注：新版没有user: root，并添加了tags标签
+
+4.定义组变量
+下面定义playbook全局变量，变量作用域为所有主机。
+【 group_vars/all 】
+---
+# Variables here are applicable to all host groups
+
+httpd_port: 80
+ntpserver: 192.168.1.2
+all文件定义了匹配所有主机作用域的变量，一般为系统公共类基础配置，如ntpserver地址、sysctl变量、iptables配置等。
+
+下面为定义webservers组的变量，变量作用域为webservers组主机。
+【 group_vars/webservers 】
+---
+# Variables for the web server configuration
+
+# Ethernet interface on which the web server should listen.
+# Defaults to the first interface. Change this to:
+#
+#  iface: eth1
+#
+# ...to override.
+#
+iface: '{{ ansible_default_ipv4.interface }}'
+
+# this is the repository that holds our sample webapp
+repository: https://github.com/bennojoy/mywebapp.git
+
+# this is the sha1sum of V5 of the test webapp.
+webapp_version: 351e47276cc66b018f4890a04709d4cc3d3edb0d
+webservers文件定义了webservers组作用域的变量。本示例涉及Apache相关配置，其中iface: '{{ ansible_default_ipv4.interface }}'引用了Facts获取的本地网卡接口名信息，另外定义了一个GitHub的repository,方便下载Web测试文件，如内部搭建git版本控制环境，此处也可以修改成本地的服务地址。
+
+下面为定义dbservers组的变量，变量作用域为dbservers组主机。
+【group_vars/dbservers 】
+---
+# The variables file used by the playbooks in the dbservers group.
+# These don't have to be explicitly imported by vars_files: they are autopopulated.
+
+mysqlservice: mysqld
+mysql_port: 3306
+dbuser: root
+dbname: foodb
+upassword: abc
+dbservers文件定义了dbservers组作用域变量，本示例涉及MySQL数据库的基本应用 信息。
+
+下面为定义lbservers组作用域变量文件，本示例主要涉及haproxy环境涉及的配置参 数值。
+【group_vars/lbservers 】
+---
+# Variables for the HAproxy configuration
+
+# HAProxy supports "http" and "tcp". For SSL, SMTP, etc, use "tcp".
+mode: http
+
+# Port on which HAProxy should listen
+listenport: 8888
+
+# A name for the proxy daemon, this wil be the suffix in the logs.
+daemonname: myapplb
+
+# Balancing Algorithm. Available options:
+# roundrobin, source, leastconn, source, uri
+# (if persistance is required use, "source")
+balance: roundrobin 
+
+# Ethernet interface on which the load balancer should listen
+# Defaults to the first interface. Change this to:
+#
+#  iface: eth1
+#
+# ...to override.
+#
+iface: '{{ ansible_default_ipv4.interface }}'
+
+5.playbook角色洋解
+本示例划分了6个角色，包括base-apache、common、db、haproxy、nagios、web，分别对应6个功能环境部署，根据不同业务场景的需求，可以随意加、减角色，如将base-apache更换成nginx,然后在site.ym丨中引用。
+(1)common角色
+common的主要功能是部署、配置系统基础服务，包括yum源、安装nagios插件、NTP服务、iptables、SELinux等，任务（tasks)的定义如下：
+【 roles/common/tasks/main.yml 】
+---
+# This role contains common plays that will run on all nodes.
+- name: Create the repository for EPEL
+  copy: src=epel.repo dest=/etc/yum.repos.d/epel.repo
+
+- name: Create the GPG key for EPEL
+  copy: src=RPM-GPG-KEY-EPEL-6 dest=/etc/pki/rpm-gpg
+
+- name: install some useful nagios plugins
+  yum: name={{ item }} state=present
+  with_items:
+   - nagios-nrpe
+   - nagios-plugins-swap
+   - nagios-plugins-users
+   - nagios-plugins-procs
+   - nagios-plugins-load
+   - nagios-plugins-disk
+
+- name: Install ntp
+  yum: name=ntp state=present
+  tags: ntp
+
+- name: Configure ntp file
+  template: src=ntp.conf.j2 dest=/etc/ntp.conf
+  tags: ntp
+  notify: restart ntp
+
+- name: Start the ntp service
+  service: name=ntpd state=started enabled=yes
+  tags: ntp
+
+
+- name: insert iptables template
+  template: src=iptables.j2 dest=/etc/sysconfig/iptables
+  notify: restart iptables
+
+- name: test to see if selinux is running
+  command: getenforce
+  register: sestatus
+  changed_when: false
+注：新版添加了Install python bindings for SE Linux的name段
+
+上述代码定义了两个远程文件复制copy，其中src(源文件）的默认位置在roles/common/files，使用with_item标签实现循环安装nagios插件，同时安装ntp服务，引用模
+块文件roles/common/templatesntp.conf.j2，且同步到目标主机/etc/ntp.conf位置。配置系统iptables，引用roles/common/templates/iptables.j2模板，“notify: restart iptables’’，状态或模板发生变化时将通知处理程序（handlers)来处理。“command: getenforce”运行getenforce来检测selinux是否在运行状态，“changed_when: false”作用为不记录命令运行结果的changed状态，即changed为False。
+
+下面定义common角色的处理程序。
+【 roles/commcm/handlers/main.yml 】
+---
+# Handlers for common notifications
+
+- name: restart ntp
+  service: name=ntpd state=restarted
+
+- name: restart iptables
+  service: name=iptables state=restarted
+上述代码定义了两个处理程序，功能分别为重启ntp、iptables服务，其中“name: restart ntp” 与任务（tasks)定义中的“notify: restart ntp”是一一对应的，“name: restart iptables”同理。
+
+下面定义了common角色iptables的配置模板：
+【 roles/common/templates/iptables.j2 】
+# {{ ansible_managed }}
+# Manual customization of this file is not recommended.
+*filter
+:INPUT ACCEPT [0:0]
+:FORWARD ACCEPT [0:0]
+:OUTPUT ACCEPT [0:0]
+
+{% if (inventory_hostname in groups.webservers) or (inventory_hostname in groups.monitoring) %}
+-A INPUT -p tcp  --dport 80 -j ACCEPT
+{% endif %}
+
+{% if (inventory_hostname in groups.dbservers) %}
+-A INPUT -p tcp  --dport 3306 -j  ACCEPT
+{% endif %}
+
+{% if (inventory_hostname in groups.lbservers) %}
+-A INPUT -p tcp  --dport {{ listenport }} -j  ACCEPT
+{% endif %}
+
+{% for host in groups.monitoring %}
+-A INPUT -p tcp -s {{ hostvars[host].ansible_default_ipv4.address }} --dport 5666 -j ACCEPT
+{% endfor %}
+
+-A INPUT -m state --state ESTABLISHED,RELATED -j ACCEPT
+-A INPUT -p icmp -j ACCEPT
+-A INPUT -i lo -j ACCEPT
+-A INPUT -m state --state NEW -m tcp -p tcp --dport 22 -j ACCEPT
+-A INPUT -j REJECT --reject-with icmp-host-prohibited
+-A FORWARD -j REJECT --reject-with icmp-host-prohibited
+COMMIT
+
+注：旧版使用该种写法{% for host in groups['monitoring'] %}，不过这个在python中应该都是通用的。
+
+“inventory_hostname”作为存放在Ansible的inventory文件中的主机名或IP,好处是可以不依靠Facts的主机名参数ansible_hostname或其他原因，一般情况下inventory_hostname等于ansible_hostname,但有时候我们习惯在Ansible的inventory中使用IP地址，而ansible_hostname则返回主机名。模板使用了Jinja2的语法，本例if...endif语句判断当前的inventory_hostname是否在webservers及monitoring组中（定义具体在hosts文件中），条件成立则添加80端口访问权限（-A INPUT -p tcp --dport 80 -j ACCEPT)。For...endfor语句实现了循环开通允许monitoring组主机访问5666端口，使用hostvars[host]得到主机对象，可以获得主机的Facts信息，如hostvars[host].ansible_default_ipv4.address获取主机IP。
+
+(2)haproxy角色
+haproxy角色主要实现了 haproxy平台的部署、配置功能，任务（tasks)的定义:
+【 roles/haproxy/tasks/main.yml 】
+---
+# This role installs HAProxy and configures it.
+
+- name: Download and install haproxy
+  yum: name=haproxy state=present
+  with_items:
+  - haproxy
+  - socat
+
+- name: Configure the haproxy cnf file with hosts
+  template: src=haproxy.cfg.j2 dest=/etc/haproxy/haproxy.cfg
+  notify: restart haproxy
+
+- name: Start the haproxy service
+  service: name=haproxy state=started enabled=yes
+注：新版没有with_items段，新版也没有Start the haproxy service的name段。
+任务（tasks)定义了两个功能，一为安装，二为同步配置文件，安装使用了yum模块，循环安装haproxy、socat两个工具，同时根据配置参数這染roles/haproxy/templates/haproxy.cfg.j2模板文件，完成后同步到目标主机/etc/haproxy/haproxy.cfg位置，状态发生变化时重启haproxy服务，使之生效。
+
+下面定义了 haproxy角色haproxy.cfg的配置模板：
+【 roles/haproxy/templates/haproxy.cfg.j2 】
+global
+    log         127.0.0.1 local2 
+
+    chroot      /var/lib/haproxy
+    pidfile     /var/run/haproxy.pid
+    maxconn     4000
+    user        root
+    group       root
+    daemon
+
+    # turn on stats unix socket
+    stats socket /var/lib/haproxy/stats level admin
+
+defaults
+    mode                    {{ mode }}
+    log                     global
+    option                  httplog
+    option                  dontlognull
+    option http-server-close
+    option forwardfor       except 127.0.0.0/8
+    option                  redispatch
+    retries                 3
+    timeout http-request    10s
+    timeout queue           1m
+    timeout connect         10s
+    timeout client          1m
+    timeout server          1m
+    timeout http-keep-alive 10s
+    timeout check           10s
+    maxconn                 3000
+
+backend app
+    {% for host in groups.lbservers %}
+    	listen {{ daemonname }} 0.0.0.0:{{ listenport }}
+    {% endfor %}
+    balance     {{ balance }}
+    {% for host in groups.webservers %}
+        server {{ host }} {{ hostvars[host]['ansible_' + iface].ipv4.address }}:{{ httpd_port }}
+    {% endfor %}
+
+注：新版为listen {{ daemonname }} {{ hostvars[host] ['ansible_' + iface].ipv4.address }}:{{ listenport }}
+
+{{ hostvars[host] ['ansible_' + iface].ipv4.address }}实现了获取网卡名变量iface(group_vars/lbservers中定义）的IPv4 IP地址。
+
+(3)web角色
+web角色主要实现了php、php-mysql、git平台部署及SELinux的配置功能，任务（tasks)的定义如下：
+【 roles/web/tasks/main.yml 】
+旧版：
+# httpd is handled by the base-apache role upstream 
+- name: Install php and git
+  yum: name={{ item }} state=present 
+  with_items:
+    -php
+    --php-mysql
+    -git
+- name: Configure SELinux to allow httpd to connect to remote database
+  seboolean: name=httpd_can_network_connect_db state=true persistent=yes 
+  when: sestatus.rc != 0 
+- name: Copy the code from repository
+  git: repo={{ repository }} version={{ webapp_version }} dest=/var/www/html/
+
+新版：
+【 roles/web/tasks/main.yml 】
+---
+- name: Copy the code from repository
+  git: repo={{ repository }} version={{ webapp_version }} dest=/var/www/html/
+【 roles/base-apache/tasks/main.yml 】
+---
+# This role installs httpd
+
+- name: Install http
+  yum:
+    name: "{{ item }}"
+    state: present
+  with_items:
+   - httpd
+   - php
+   - php-mysql
+   - git
+
+- name: Configure SELinux to allow httpd to connect to remote database
+  seboolean:
+    name: httpd_can_network_connect_db
+    state: true
+    persistent: yes
+  when: sestatus.rc != 0
+
+- name: http service state
+  service:
+    name: httpd
+    state: started
+    enabled: yes
+判断sestatus变量（roles/common/tasks/main.yml中定义）返回的rc(运行代码）不等于0(失败）则配置selinuxhttpd访问远程数据库的权限，使用的是Ansible的seboolean模块，该条语句等价于命令行 “setsebool httpd_can_network_connect_db 1”，其中“persistent=yes”表示开机自启动。
+
+(4)nagios角色
+nagios角色主要实现了nagios监控平台的部署，重点介绍任务（tasks)的定义：
+【 roles/nagios/tasks/main.yml 】
+---
+# This will install nagios
+
+- name: install nagios
+  yum: pkg={{ item }} state=present
+  with_items:
+   - nagios
+   - nagios-plugins
+   - nagios-plugins-nrpe
+   - nagios-plugins-ping
+   - nagios-plugins-ssh
+   - nagios-plugins-http
+   - nagios-plugins-mysql
+   - nagios-devel
+  notify: restart httpd
+
+- name: create nagios config dir
+  file: path=/etc/nagios/ansible-managed state=directory
+
+- name: configure nagios
+  copy: src=nagios.cfg dest=/etc/nagios/nagios.cfg
+  notify: restart nagios
+
+- name: configure localhost monitoring
+  copy: src=localhost.cfg dest=/etc/nagios/objects/localhost.cfg
+  notify: restart nagios
+
+- name: configure nagios services
+  copy: src=ansible-managed-services.cfg dest=/etc/nagios/
+
+- name: create the nagios object files
+  template: src={{ item + ".j2" }}
+            dest=/etc/nagios/ansible-managed/{{ item }}
+  with_items:
+    - webservers.cfg
+    - dbservers.cfg
+    - lbservers.cfg
+  notify: restart nagios
+
+- name: start nagios
+  service: name=nagios state=started enabled=yes
+template分发多个模板文件时可以使用with_items来循环同步，变量与字符使用“+”号连接（具体见Jinja2语法)。
+理解以上4个角色的定义后，再理解ansible-examples其他playbook的内容已经没有太大的闲难，本书将不一一说明。
+1节YAML语法介绍参考http://zh.wikipedia.org/zh-cn/YAML。
+2节~11节Ansible介绍及示例参考http://docs.ansible.com官网文档。
