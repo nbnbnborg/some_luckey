@@ -52,8 +52,7 @@ YAML也存在类似于Python块的概念，例如：
  - USA
  - Japan
 对应的Python结果为：
-[['Hesperiidae',	'Papilionidae',	'Apatelodidae',	'Epiplemidae'],	['China',
-,USA','Japan']]
+[['Hesperiidae','Papilionidae',	'Apatelodidae',	'Epiplemidae'],	['China',USA','Japan']]
 
 1.2块映射描述
 块映射就是将描述的元素序列到Python的字典(Dictionary)中，格式为＂键(key):值(value)",以下为YAML例子：
