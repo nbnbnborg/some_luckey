@@ -9,7 +9,7 @@ Ansible(http://www.ansibleworks.com/)一种集成IT系统的配置管理、应�
 	对云计算平台、大数据都有很好的支持；
 	提供一个功能强大、操作性强的Web管理界面和RESTAPI接口————AWX平台。
 	
-Ansible的架构图见图9-1,	用户通过Ansible编排引擎操作公共／私有云或CMDB（配置管理数据库）中的主机，其中Ansible编排引擎由Inventory(主机与组规则）、API、Modules(模块）、Plugins(插件）组成。
+Ansible的架构图见图1,	用户通过Ansible编排引擎操作公共／私有云或CMDB（配置管理数据库）中的主机，其中Ansible编排引擎由Inventory(主机与组规则）、API、Modules(模块）、Plugins(插件）组成。
 Ansible与Saltstack最大的区别是Ansible无需在被控主机部署任何客户端代理，默认直接通过SSH通道进行远程命令执行或下发配置；相同点是都具备功能强大、灵活的系统管理、状态配置，都使用YAML格式来描述配置，两者都提供丰富的模板及API,对云计算平台、大数据都有很好的支持。Ansible在GitHub上的地址为https://github.com/ansible/,其中提供了不少配置例子供参考，本文测试的版本为l.3.2。
 
 Ansible提供了一个在线Playbook分享平台，地址：https://galaxy.ansibleworks.com,该平台汇聚了各类常用功能的角色，找到适合自己的Role(角色）后，只需要运行,ansible-galaxyinstall作者id角色包名称”就可以安装到本地，比如想安装bennojoy提供的Nginx安装与配置的角色，直接运行"ansible-galaxyinstallbennojoy.nginx"即可安装到本地，该角色的详细地址为：https://galaxy.ansibleworks.com/list#/roles/2。
