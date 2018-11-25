@@ -1,0 +1,47 @@
+搜索引擎十技
+
+在搜索引擎框里把多个关键字用加号（+）连接起来，搜索引擎就会自动去匹配互联网上与所有关键词相关的内容，默认与空格等效，百度和Google都支持。
+
+把搜索词放在双引号中，代表完全匹配搜索，也就是说搜索结果返回的页面包含双引号中出现的所有的词，连顺序也必须完全匹配。bd和Google 都支持这个指令。例如搜索： “ 上海海上”，如：mysql_install_db “could not find mysqld”
+
+减号代表搜索不包含减号后面的词的页面。使用这个指令时减号前面必须是空格，减号后面没有空格，紧跟着需要排除的词。例如：老男孩-教育。
+
+星号*是常用的通配符，也可以用在搜索中。百度不支持*号搜索指令。
+比如在Google 中搜索：搜索*擎  其中的*号代表任何文字。
+返回的结果就不仅包含“搜索引擎”，还包含了“搜索收擎”，“搜索巨擎”等内容。
+常用的案例：搜索报错中的特定路径, 有个字不会打
+
+该指令用于搜索查询词出现在url 中的页面。bd和Google 都支持inurl 指令。inurl 指令支持中文和英文。
+比如搜索：inurl:hadoop
+返回的结果都是网址url 中包含“hadoop”的页面。
+由于关键词出现在url中对排名有一定影响，使用inurl:搜索可以更准确地找到与关键字相关的内容。
+inurl:gov 房价
+
+intitle: 指令返回的是页面title 中包含关键词的页面。
+Google 和bd都支持intitle 指令。
+使用intitle 指令找到的文件更为准确。出现在title 中，说明页页面内容跟关键字有很大关联。
+比如搜索：intitle:zabbix
+(注意：intitle只对其后面的第一个关键字生效)
+
+allintitle:搜索返回的是页面标题中包含多组关键词的文件。例如 ：allintitle:zabbix hadoop
+就相当于：intitle:zabbix intitle:hadoop
+返回的是标题中中既包含“zabbix”，也包含“hadoop”的页面，显著提高搜索命中率
+
+allinurl与allintitle: 类似。
+allinurl:zabbix hadoop就相当于 ：inurl:zabbix inurl:hadoop
+
+用于搜索特定文件格式。Google和bd都支持filetype 指令。
+比如搜索filetype:pdf hadoop
+返回的就是包含SEO 这个关键词的所有pdf 文件。
+
+site:是SEO 最熟悉的高级搜索指令，用来搜索某个域名下的所有文件。
+比如：hadoop site:www.178linux.com（效率高，显示清楚）
+
+link:查找链接到某个特定网页的页面
+relate:查找与您已浏览过的网址类似的网站
+..:使用不含空格的英文句号(..) 隔开多个数字， 就可查看包含日期、价格和尺寸等指定范围内 数值的搜索结果。
+cache:查看Google上次抓取的网站的网页外观。
+~:查看同义词
+define:查找网络定义
+
+inurl:wit.edu.cn 结题报告书 filetype:doc
