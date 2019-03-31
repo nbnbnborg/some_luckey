@@ -2,10 +2,10 @@
 2019/3/25	TRUE	2km/4min	TRUE	3km	FALSE	0	4799						73.95
 2019/3/26	TRUE	2km/6min	TRUE	2km	FALSE	0	3805					2*100VC	73.5
 2019/3/27	TRUE	2km/6min	FALSE	0km	FALSE	0	4495	0个面包	外卖	推荐苹果	TRUE	0	73.95
-2019/3/28													
-2019/3/29													
-2019/3/30													
-2019/3/31													
+2019/3/28	TRUE	2km/6min	FALSE	0km	FALSE	0	3274	0个面包	外卖	3个鸡蛋+饭	FALSE	0	
+2019/3/29	TRUE	6km/36min	FALSE	0km	FALSE	0	7583	0个面包	外卖	鸡蛋面+荷包蛋面	FALSE	0	
+2019/3/30	FALSE	-	TRUE	1km	FALSE	0	11683	面包	家里	家里	FALSE	0	
+2019/3/31	FALSE	-	FALSE	0km	FALSE	0	9040	大饼油条	快餐	外卖	TRUE	0	
 													
 													
 													
